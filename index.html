@@ -4527,8 +4527,9 @@
         /* 3. 状态栏容器 */
         #chat-header-status {
             display: flex;
-            width: 250px;
+            width: 260px;
             align-items: center;
+            justify-content: center;
             gap: 5px;
             font-size: 11px;
             color: var(--text-secondary);
@@ -4552,6 +4553,7 @@
 
         /* 5. 状态文本 */
         .status-text {
+            width: 250px;
             font-weight: 500;
             white-space: nowrap;
             overflow: hidden;
@@ -11752,26 +11754,21 @@ ${contextSummaryForApproval}
 
                             case 'accept_gift': {
                                 const originalGiftTimestamp = msgData.gift_timestamp;
-                                const originalGiftMsgIndex = chat.history.findIndex(m => m.timestamp === originalGiftTimestamp);
-                                console.log('----------------case accept_gift：', msgData, originalGiftMsgIndex, chat.history);
+                                const originalGiftMsgIndex = chat.history.findLastIndex(m => m.timestamp == originalGiftTimestamp);
 
                                 if (originalGiftMsgIndex > -1) {
                                     // 更新数据模型中原始礼物的状态
                                     const originalGift = chat.history[originalGiftMsgIndex];
                                     originalGift.status = 'accepted';
 
-                                    // 【核心修复】健壮地获取送礼者名字，防止undefined
-                                    console.log('-----------------------,', originalGift, chat)
                                     const senderOfGift = originalGift.senderName || (originalGift.role === 'user' ? (chat.isGroup ? chat.settings.myNickname || '我' : '我') : '未知发送者');
 
-                                    // 创建新的、可见的系统消息来宣布事件
                                     const acceptanceNotice = {
                                         role: 'system',
                                         type: 'pat_message',
-                                        content: `${msgData.name} 收下了 ${senderOfGift} 的礼物 ${originalGift.giftName}`,
+                                        content: `${msgData.name|| chat.name} 收下了 ${senderOfGift} 的礼物 ${originalGift.giftName}`,
                                         timestamp: messageTimestamp++
                                     };
-                                    console.log('---------------acceptanceNotice: ', acceptanceNotice)
                                     // aiMessage = acceptanceNotice; // 将这条新消息交给后续流程处理和渲染
                                     newMessagesToRender.push(acceptanceNotice);
                                 }
@@ -11780,25 +11777,22 @@ ${contextSummaryForApproval}
 
                             case 'decline_gift': {
                                 const originalGiftTimestamp = msgData.gift_timestamp;
-                                const originalGiftMsgIndex = chat.history.findIndex(m => m.timestamp === originalGiftTimestamp);
-                                console.log('----------------case accept_gift：', msgData, originalGiftMsgIndex);
+                                const originalGiftMsgIndex = chat.history.findIndex(m => m.timestamp == originalGiftTimestamp);
+
                                 if (originalGiftMsgIndex > -1) {
                                     // 更新数据模型中原始礼物的状态
                                     const originalGift = chat.history[originalGiftMsgIndex];
                                     originalGift.status = 'declined';
 
-                                    console.log('-----------------------,', originalGift, chat)
                                     //【核心修复】健壮地获取送礼者名字
                                     const senderOfGift = originalGift.senderName || (originalGift.role === 'user' ? (chat.isGroup ? chat.settings.myNickname || '我' : '我') : '未知发送者');
 
-                                    // 创建新的、可见的系统消息
                                     const declineNotice = {
                                         role: 'system',
                                         type: 'pat_message',
-                                        content: `${msgData.name} 婉拒了 ${senderOfGift} 的礼物`,
+                                        content: `${msgData.name|| chat.name} 婉拒了 ${senderOfGift} 的礼物`,
                                         timestamp: messageTimestamp++
                                     };
-                                    // aiMessage = declineNotice; // 将新消息交给后续流程处理
                                     newMessagesToRender.push(declineNotice);
                                 }
                                 break;
@@ -11961,9 +11955,8 @@ ${contextSummaryForApproval}
                                 break;
                         }
                     }
-                    console.log('1------------newMessagesToRender: ', newMessagesToRender);
+
                     if (newMessagesToRender.length > 0) {
-                        console.log('------------newMessagesToRender: ', newMessagesToRender);
                         // 1. 将所有新消息一次性地、按顺序地加入到历史记录中
                         chat.history.push(...newMessagesToRender);
                         // 2. 处理通知和未读数（只需要根据第一条新消息判断一次即可）
