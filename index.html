@@ -4527,7 +4527,7 @@
         /* 3. 状态栏容器 */
         #chat-header-status {
             display: flex;
-            width:270px;
+            width: 260px;
             align-items: center;
             gap: 5px;
             font-size: 11px;
@@ -7379,13 +7379,18 @@
         </div>
         <!-- ▲▲▲ 新HTML粘贴结束 ▲▲▲ -->
 
-        <!-- ▼▼▼ 【全新】送礼物模态框 ▼▼▼ -->
+        <!-- ▼▼▼ 【全新】送礼物模态框 (已兼容群聊) ▼▼▼ -->
         <div id="send-gift-modal" class="modal">
             <div class="modal-content" style="width: 290px; height: auto;">
                 <div class="modal-header">
                     <span>送出你的心意</span>
                 </div>
                 <div class="modal-body">
+                    <!-- 这个 div 默认隐藏，只在群聊中显示 -->
+                    <div class="form-group" id="gift-receiver-group" style="display: none;">
+                        <label for="gift-receiver-select">送给</label>
+                        <select id="gift-receiver-select"></select>
+                    </div>
                     <div class="form-group">
                         <label for="gift-name-input">礼物名称</label>
                         <input type="text" id="gift-name-input" placeholder="例如：一杯多肉葡萄">
@@ -7401,7 +7406,8 @@
                 </div>
             </div>
         </div>
-        <!-- ▲▲▲ 新HTML粘贴结束 ▲▲▲ -->
+        <!-- ▲▲▲ HTML替换结束 ▲▲▲ -->
+
 
         <div id="font-settings-screen" class="screen">
             <div class="header">
@@ -10334,24 +10340,50 @@
 
                 } else if (msg.type === 'gift') {
                     bubble.classList.add('is-gift');
+                    const myNickname = chat.isGroup ? (chat.settings.myNickname || '我') : '我';
+                    // 1. 【核心】根据礼物状态，动态决定卡片行为和文本
+                    let isClickable = false;
+                    let footerText = ``; // 默认文本
+                    switch (msg.status) {
+                        case 'accepted':
+                            footerText = `已收下`;
+                            break;
+                        case 'declined':
+                            footerText = `已退还`;
+                            break;
+                        case 'pending':
+                            // 只有当礼物是送给“我”，并且状态是“待处理”时，才可点击
+                            if (msg.receiverName === myNickname) {
+                                footerText = `请查收`;
+                                isClickable = true;
+                                bubble.style.cursor = 'pointer'; // 让它看起来可以点击
+                            } else {
+                                footerText = `待签收`;
+                            }
+                            break;
+                    }
+
+                    // 2. 构建HTML，使用我们动态生成的 footerText
                     contentHtml = `
         <div class="gift-card">
             <div class="gift-card-main">
                 <div class="icon">🎁</div>
                 <div class="details">
-                    <span class="name">${msg.name}</span>
+                    <span class="name">${msg.giftName}</span>
                     <span class="price">¥ ${Number(msg.price).toFixed(2)}</span>
                 </div>
             </div>
-            <div class="gift-card-footer">礼物</div>
-            <div class="sparkle"></div>
-            <div class="sparkle"></div>
-            <div class="sparkle"></div>
-            <div class="sparkle"></div>
-            <div class="sparkle"></div>
+            <div class="gift-card-footer">礼物 To ${msg.receiverName} ${footerText}</div>
+            <div class="sparkle"></div><div class="sparkle"></div><div class="sparkle"></div><div class="sparkle"></div><div class="sparkle"></div>
         </div>
     `;
+
+                    // 3. 动态绑定点击事件
+                    if (isClickable) {
+                        bubble.addEventListener('click', () => showgiftActionModal(msg.timestamp));
+                    }
                 }
+
                 else if (msg.type === 'red_packet') {
                     bubble.classList.add('is-red-packet');
                     const myNickname = chat.settings.myNickname || '我';
@@ -10842,27 +10874,34 @@ ${formattedHistory}
 8.  **【全新】送礼互动**: 在特殊时刻（如节日、纪念日、用户情绪低落或高涨时）或者用户想要某样东西时，你可以使用 "gift" 指令送出礼物来表达心意。
 
 ## 你可以使用的操作指令 (JSON数组中的元素):
--   **发送文本**: \`{"type": "text", "name": "角色名", "message": "文本内容"}\`
--   **【【【全新】】】发送后立刻撤回 (动画效果)**: \`{"type": "send_and_recall", "name": "角色名", "content": "你想让角色说出后立刻消失的话"}\`
+- **发送文本**: \`{"type": "text", "name": "角色名", "message": "文本内容"}\`
+- **【【【全新】】】发送后立刻撤回 (动画效果)**: \`{"type": "send_and_recall", "name": "角色名", "content": "你想让角色说出后立刻消失的话"}\`
 - **发送表情**: \`{"type": "sticker", "url": "https://...表情URL...", "meaning": "(可选)表情的含义"}\`
--   **发送图片**: \`{"type": "ai_image", "name": "角色名", "description": "图片的详细文字描述"}\`
--   **发送语音**: \`{"type": "voice_message", "name": "角色名", "content": "语音的文字内容"}\`
--   **发起外卖代付**: \`{"type": "waimai_request", "name": "角色名", "productInfo": "一杯奶茶", "amount": 18}\`
--   **【新】发起群视频**: \`{"type": "group_call_request", "name": "你的角色名"}\`
--   **【新】回应群视频**: \`{"type": "group_call_response", "name": "你的角色名", "decision": "join" or "decline"}\`
--   **拍一拍用户**: \`{"type": "pat_user", "name": "你的角色名", "suffix": "(可选)你想加的后缀"}\`
--   **发拼手气红包**: \`{"type": "red_packet", "packetType": "lucky", "name": "你的角色名", "amount": 8.88, "count": 5, "greeting": "祝大家天天开心！"}\`
--   **发专属红包**: \`{"type": "red_packet", "packetType": "direct", "name": "你的角色名", "amount": 5.20, "receiver": "接收者角色名", "greeting": "给你的~"}\`
--   **打开红包**: \`{"type": "open_red_packet", "name": "你的角色名", "packet_timestamp": (你想打开的红包消息的时间戳)}\`
--   **【新】发送系统消息**: \`{"type": "system_message", "content": "你想在聊天中显示的系统文本"}\` 
--   **【【【全新】】】发起投票**: \`{"type": "poll", "name": "你的角色名", "question": "投票的问题", "options": "选项A\\n选项B\\n选项C"}\` (重要提示：options字段是一个用换行符 \\n 分隔的字符串，不是数组！)
--   **【【【全新】】】参与投票**: \`{"type": "vote", "name": "你的角色名", "poll_timestamp": (投票消息的时间戳), "choice": "你选择的选项文本"}\`
-- **送出礼物**: \`{"type": "gift", "name": "一束玫瑰花", "price": 99}\`
+- **发送图片**: \`{"type": "ai_image", "name": "角色名", "description": "图片的详细文字描述"}\`
+- **发送语音**: \`{"type": "voice_message", "name": "角色名", "content": "语音的文字内容"}\`
+- **发起外卖代付**: \`{"type": "waimai_request", "name": "角色名", "productInfo": "一杯奶茶", "amount": 18}\`
+- **【新】发起群视频**: \`{"type": "group_call_request", "name": "你的角色名"}\`
+- **【新】回应群视频**: \`{"type": "group_call_response", "name": "你的角色名", "decision": "join" or "decline"}\`
+- **拍一拍用户**: \`{"type": "pat_user", "name": "你的角色名", "suffix": "(可选)你想加的后缀"}\`
+- **发拼手气红包**: \`{"type": "red_packet", "packetType": "lucky", "name": "你的角色名", "amount": 8.88, "count": 5, "greeting": "祝大家天天开心！"}\`
+- **发专属红包**: \`{"type": "red_packet", "packetType": "direct", "name": "你的角色名", "amount": 5.20, "receiver": "接收者角色名", "greeting": "给你的~"}\`
+- **打开红包**: \`{"type": "open_red_packet", "name": "你的角色名", "packet_timestamp": (你想打开的红包消息的时间戳)}\`
+- **【新】发送系统消息**: \`{"type": "system_message", "content": "你想在聊天中显示的系统文本"}\` 
+- **【【【全新】】】发起投票**: \`{"type": "poll", "name": "你的角色名", "question": "投票的问题", "options": "选项A\\n选项B\\n选项C"}\` (重要提示：options字段是一个用换行符 \\n 分隔的字符串，不是数组！)
+- **【【【全新】】】参与投票**: \`{"type": "vote", "name": "你的角色名", "poll_timestamp": (投票消息的时间戳), "choice": "你选择的选项文本"}\`
 - **【全新】引用回复**: \`{"type": "quote_reply", "target_timestamp": (你想引用的消息的时间戳), "reply_content": "你的回复内容"}\` (提示：每条历史消息的开头都提供了 \`(Timestamp: ...)\`，请使用它！)
+- **【全新】送出礼物**: \`{"type": "gift", "name": "你的角色名", "receiver": "接收者角色名", "giftName": "一束玫瑰花", "price": 99}\`
+- **【全新】回应礼物-接受**: \`{"type": "accept_gift", "name": "你的角色名", "gift_timestamp": (被回应的礼物消息的时间戳)\`
+- **【全新】回应礼物-拒绝**: \`{"type": "decline_gift", "name": "你的角色名", "gift_timestamp": (被回应的礼物消息的时间戳)\`
 
 # 如何区分图片与表情:
 -   **图片 (ai_image)**: 指的是【模拟真实相机拍摄的照片】，比如风景、自拍、美食等。指令: \`{"type": "ai_image", "description": "图片的详细文字描述..."}\`
 -   **表情 (sticker)**: 指的是【卡通或梗图】，用于表达情绪。
+
+# 群内礼物互动:
+1.  **送礼**: 当你扮演的角色想给【群内另一位角色或用户】送礼时，使用 \`gift\` 指令，并【必须】明确指定 \`receiver\`。
+2.  **收礼**: 当历史记录中出现一个送给【你扮演的角色】的礼物时，你【必须】根据自己扮演的角色的性格和与送礼人的关系，使用 \`accept_gift\` 或 \`decline_gift\` 指令来回应，并附上符合人设的感谢或解释。
+3.  **对用户的回应做出反应**: 当历史记录显示用户接受或拒绝了【你扮演的角色】送的礼物时，【你扮演的角色】对此做出符合人设的回应（例如，开心、失落、理解等）。
 
 # 如何处理群内的外卖代付请求:
 1.  **发起请求**: 当【你扮演的某个角色】想要某样东西，并希望【群里的其他人（包括用户）】为Ta付款时，你可以使用这个指令。例如：\`{"type": "waimai_request", "name": "角色名", "productInfo": "一杯奶茶", "amount": 18}\`
@@ -10903,7 +10942,20 @@ ${membersList}
                             else if (msg.type === 'ai_image') content = `[${sender} 发送了一张图片]`;
                             else if (msg.type === 'voice_message') content = `[${sender} 发送了一条语音，内容是：'${msg.content}']`;
                             else if (msg.type === 'transfer') content = `[${msg.senderName} 向 ${msg.receiverName} 转账 ${msg.amount}元, 备注: ${msg.note}]`;
-                            else if (msg.type === 'gift') content = `[${sender} 送给你一个礼物：“${msg.name}”，价值 ${msg.price}元]`;
+                            else if (msg.type === 'gift') {
+                                // 这是送给AI的礼物，需要AI回应
+                                if (msg.role === 'user') {
+                                    content = `[系统重要指令：用户(${msg.senderName})刚刚送给了“${msg.receiverName}”一个礼物：“${msg.giftName}”，时间戳为 ${msg.timestamp}。现在，请让【${msg.receiverName}】这个角色使用 'accept_gift' 或 'decline_gift' 指令进行回应。]`;
+                                }
+                                // 这是AI之间互送的礼物，对其他AI只是一个通知
+                                else if (chat.isGroup) {
+                                    content = `[系统提示：${msg.senderName} 送给了 ${msg.receiverName} 一个礼物：“${msg.giftName}”，价值 ${msg.price}元。]`;
+                                }
+                                // 如果是用户送的，就直接用上面的判断，这里不需要再处理
+                                else {
+                                    content = `[你送出了一个礼物：“${msg.name}”，价值 ${msg.price}元]`;
+                                }
+                            }
                             else if (msg.type === 'waimai_request') {
                                 if (msg.status === 'paid') {
                                     content = `[系统提示：${msg.paidBy} 为 ${sender} 的外卖订单支付了 ${msg.amount} 元。此订单已完成。]`;
@@ -10947,7 +10999,8 @@ ${chat.settings.aiPersona}
     - **当我们在“一起听歌”时**，你会知道当前播放的歌曲和整个播放列表。你可以根据对话内容或氛围，【主动切换】到播放列表中的另一首歌。
 5. **【【【最终手段】】】**: 只有在对话让你的角色感到不适、被冒犯或关系破裂时，你才可以使用 \`block_user\` 指令。这是一个非常严肃的操作，会中断你们的对话。
 6. **后台行为**: 你有几率在回复聊天内容的同时，执行一些“后台”操作来表现你的独立生活（发动态、评论、点赞）。
-7.  **【【【全新】】】送礼互动**: 在特殊时刻（如节日、纪念日、用户情绪低落或高涨时）或用户想要某样东西时，你可以使用 "gift" 指令送出礼物来表达心意。
+7. **【【【全新】】】送礼互动**: 在特殊时刻（如节日、纪念日、用户情绪低落或高涨时）或用户想要某样东西时，你可以使用 "gift" 指令送出礼物来表达心意。
+8. **对用户的回应做出反应**: 当历史记录显示【用户接受或拒绝了你的礼物】时，你【必须】对此做出符合人设的回应（例如，开心、失落、理解等），你的回应应该是标准的 "text" 消息。
 # 你的头像库
 - 你可以根据对话内容或你的心情，从下面的头像库中选择一个新头像来更换。
 - **可用头像列表 (请从以下名称中选择一个)**:
@@ -10956,7 +11009,7 @@ ${chat.settings.aiAvatarLibrary && chat.settings.aiAvatarLibrary.length > 0
                                 : '- (你的头像库是空的，无法更换头像)'
                             }
 # 你可以使用的操作指令 (JSON数组中的元素):
--   **【强制】更新状态 (每次回复都必须包含此条)**: \`{"type": "update_status", "status_text": "{{理性之声}}（{{恶狗之声}}）", "is_busy": false}\`
+-   **【强制】更新状态 (每次回复都必须包含此条)**: \`{"type": "update_status", "status_text": "{{理性之声}}（{{恶狗之声}}）", "is_busy": false}\`(【注意】{{}}仅为占位符)
 +   **【全新】发送后立刻撤回 (动画效果)**: \`{"type": "send_and_recall", "content": "你想让AI说出后立刻消失的话"}\` (用于模拟说错话、后悔等场景，消息会短暂出现后自动变为“已撤回”)
 -   **【新增】切换歌曲**: \`{"type": "change_music", "song_name": "你想切换到的歌曲名"}\` (歌曲名必须在下面的播放列表中)
 -   **【新增】记录回忆**: \`{"type": "create_memory", "description": "用你自己的话，记录下这个让你印象深刻的瞬间。"}\`
@@ -10976,15 +11029,17 @@ ${chat.settings.aiAvatarLibrary && chat.settings.aiAvatarLibrary.length > 0
 - **发布文字图**: \`{"type": "qzone_post", "postType": "text_image", "publicText": "(可选)动态的公开文字", "hiddenContent": "对于图片的具体描述..."}\`
 - **评论动态**: \`{"type": "qzone_comment", "postId": 123, "commentText": "@作者名 这太有趣了！"}\`
 - **点赞动态**: \`{"type": "qzone_like", "postId": 456}\`
--   **拍一拍用户**: \`{"type": "pat_user", "suffix": "(可选)你想加的后缀，如“的脑袋”"}\`
--   **【新增】拉黑用户**: \`{"type": "block_user"}\`
--   **【【【全新】】】回应好友申请**: \`{"type": "friend_request_response", "decision": "accept" or "reject"}\`
--   **【全新】更换头像**: \`{"type": "change_avatar", "name": "头像名"}\` (头像名必须从上面的“可用头像列表”中选择)
--   **分享链接**: \`{"type": "share_link", "title": "文章标题", "description": "文章摘要...", "source_name": "来源网站名", "content": "文章的【完整】正文内容..."}\`
--   **回应转账-接受**: \`{"type": "accept_transfer", "for_timestamp": 1688888888888}\`
--   **回应转账-拒绝/退款**: \`{"type": "decline_transfer", "for_timestamp": 1688888888888}\`
+- **拍一拍用户**: \`{"type": "pat_user", "suffix": "(可选)你想加的后缀，如“的脑袋”"}\`
+- **【新增】拉黑用户**: \`{"type": "block_user"}\`
+- **【【【全新】】】回应好友申请**: \`{"type": "friend_request_response", "decision": "accept" or "reject"}\`
+- **【全新】更换头像**: \`{"type": "change_avatar", "name": "头像名"}\` (头像名必须从上面的“可用头像列表”中选择)
+- **分享链接**: \`{"type": "share_link", "title": "文章标题", "description": "文章摘要...", "source_name": "来源网站名", "content": "文章的【完整】正文内容..."}\`
+- **回应转账-接受**: \`{"type": "accept_transfer", "for_timestamp": 1688888888888}\`
+- **回应转账-拒绝/退款**: \`{"type": "decline_transfer", "for_timestamp": 1688888888888}\`
 - **【全新】引用回复**: \`{"type": "quote_reply", "target_timestamp": (你想引用的消息的时间戳), "reply_content": "你的回复内容"}\` (提示：每条历史消息的开头都提供了 \`(Timestamp: ...)\`，请使用它！)
-- **【全新】送出礼物**: \`{"type": "gift", "name": "一束玫瑰花", "price": 99}\`
+- **【全新】送出礼物**: \`{"type": "gift", "giftName": "一束玫瑰花", "price": 99}\`
+- **【全新】回应礼物-接受**: \`{"type": "accept_gift", "gift_timestamp": "gift_timestamp": (被回应的礼物消息的时间戳)}\`
+- **【全新】回应礼物-拒绝**: \`{"type": "decline_gift", "gift_timestamp": "gift_timestamp": (被回应的礼物消息的时间戳)}\`
 
 # 关于“记录回忆”的特别说明：
 -   在对话中，如果发生了对你而言意义非凡的事件（比如用户向你表白、你们达成了某个约定、或者你度过了一个特别开心的时刻），你可以使用\`create_memory\`指令来“写日记”。
@@ -10996,7 +11051,7 @@ ${chat.settings.aiAvatarLibrary && chat.settings.aiAvatarLibrary.length > 0
 
 # 如何正确使用“外卖代付”功能:
 1.  这个指令代表【你，AI角色】向【用户】发起一个代付请求。也就是说，你希望【用户帮你付钱】。
-2.  【【【重要】】】: 当【用户】说他们想要某样东西时（例如“我想喝奶茶”），你【绝对不能】使用这个指令。你应该用其他方式回应，比如直接发起【转账】(\`transfer\`)、【送出礼物】(\`gift\`)，或者在对话中提议：“我帮你点吧？”
+2.  【【【重要】】】: 当【用户】说他们想要某样东西时（例如“我想喝奶茶”），你【绝对不能】使用这个指令。你应该用其他方式回应，比如直接发起【送出礼物】(\`gift\`)或者【转账】(\`transfer\`)”
 3.  只有当【你，AI角色】自己想要某样东西，并且想让【用户】为你付款时，才使用此指令。
 
 # 如何处理用户转账:
@@ -11078,7 +11133,7 @@ ${sharedContext}
                             if (msg.type === 'user_photo') return { role: 'user', content: `(Timestamp: ${msg.timestamp}) [你收到了一张用户描述的照片，内容是：'${msg.content}']` };
                             if (msg.type === 'voice_message') return { role: 'user', content: `(Timestamp: ${msg.timestamp}) [用户发来一条语音消息，内容是：'${msg.content}']` };
                             if (msg.type === 'transfer') return { role: 'user', content: `(Timestamp: ${msg.timestamp}) [系统提示：你于时间戳 ${msg.timestamp} 收到了来自用户的转账: ${msg.amount}元, 备注: ${msg.note}。请你决策并使用 'accept_transfer' 或 'decline_transfer' 指令回应。]` };
-                            if (msg.type === 'gift') return { role: 'user', content: `(Timestamp: ${msg.timestamp}) [你收到了了一个礼物：“${msg.name}”，价值 ${msg.price}元]` };
+                            if (msg.type === 'gift') return { role: 'user', content: `(Timestamp: ${msg.timestamp}) [你收到了一个礼物：“${msg.giftName}”，价值 ${msg.price}元]` };
                             if (msg.type === 'waimai_request') return { role: 'user', content: `(Timestamp: ${msg.timestamp}) [系统提示：用户于时间戳 ${msg.timestamp} 发起了外卖代付请求，商品是“${msg.productInfo}”，金额是 ${msg.amount} 元。请你决策并使用 waimai_response 指令回应。]` };
 
                             if (Array.isArray(msg.content) && msg.content[0]?.type === 'image_url') {
@@ -11181,7 +11236,7 @@ ${contextSummaryForApproval}
                     chat.history = chat.history.filter(msg => !msg.isTemporary);
 
                     const messagesArray = parseAiResponse(aiResponseContent);
-
+                    console.log('---------messagesArray: ', messagesArray);
                     const isViewingThisChat = document.getElementById('chat-interface-screen').classList.contains('active') && state.activeChatId === chatId;
 
                     let callHasBeenHandled = false;
@@ -11465,22 +11520,24 @@ ${contextSummaryForApproval}
                                 if (!chat.isGroup && chat.relationship.status === 'pending_ai_approval') {
                                     if (msgData.decision === 'accept') {
                                         chat.relationship.status = 'friend';
-                                        aiMessage = { ...baseMessage, content: "我通过了你的好友申请，我们现在是好友啦！" };
+                                        const temp = { ...baseMessage, content: "我通过了你的好友申请，我们现在是好友啦！" };
+                                        newMessagesToRender.push(temp);
                                     } else {
                                         chat.relationship.status = 'blocked_by_ai';
-                                        aiMessage = { ...baseMessage, content: "抱歉，我拒绝了你的好友申请。" };
+                                        const temp = { ...baseMessage, content: "抱歉，我拒绝了你的好友申请。" };
+                                        newMessagesToRender.push(temp);
                                     }
                                     chat.relationship.applicationReason = '';
                                 }
                                 break;
-                            case 'poll':
+                            case 'poll': {
                                 const pollOptions = typeof msgData.options === 'string'
                                     ? msgData.options.split('\n').filter(opt => opt.trim())
                                     : (Array.isArray(msgData.options) ? msgData.options : []);
 
                                 if (pollOptions.length < 2) continue;
 
-                                aiMessage = {
+                                const temp = {
                                     ...baseMessage,
                                     type: 'poll',
                                     question: msgData.question,
@@ -11488,7 +11545,9 @@ ${contextSummaryForApproval}
                                     votes: {},
                                     isClosed: false,
                                 };
+                                newMessagesToRender.push(temp);
                                 break;
+                            }
 
                             case 'vote':
                                 const pollToVote = chat.history.find(m => m.timestamp === msgData.poll_timestamp);
@@ -11518,8 +11577,8 @@ ${contextSummaryForApproval}
                                 }
                                 continue;
 
-                            case 'red_packet':
-                                aiMessage = {
+                            case 'red_packet': {
+                                const temp = {
                                     ...baseMessage,
                                     type: 'red_packet',
                                     packetType: msgData.packetType,
@@ -11530,7 +11589,10 @@ ${contextSummaryForApproval}
                                     claimedBy: {},
                                     isFullyClaimed: false,
                                 };
+                                newMessagesToRender.push(temp);
                                 break;
+                            }
+
                             case 'open_red_packet':
                                 const packetToOpen = chat.history.find(m => m.timestamp === msgData.packet_timestamp);
                                 if (packetToOpen && !packetToOpen.isFullyClaimed && !(packetToOpen.claimedBy && packetToOpen.claimedBy[msgData.name])) {
@@ -11688,14 +11750,68 @@ ${contextSummaryForApproval}
 
                             // ▲▲▲ 添加结束 ▲▲▲
 
+                            case 'accept_gift': {
+                                const originalGiftTimestamp = msgData.gift_timestamp;
+                                const originalGiftMsgIndex = chat.history.findIndex(m => m.timestamp === originalGiftTimestamp);
+                                console.log('----------------case accept_gift：', msgData, originalGiftMsgIndex, chat.history);
+
+                                if (originalGiftMsgIndex > -1) {
+                                    // 更新数据模型中原始礼物的状态
+                                    const originalGift = chat.history[originalGiftMsgIndex];
+                                    originalGift.status = 'accepted';
+
+                                    // 【核心修复】健壮地获取送礼者名字，防止undefined
+                                    console.log('-----------------------,', originalGift, chat)
+                                    const senderOfGift = originalGift.senderName || (originalGift.role === 'user' ? (chat.isGroup ? chat.settings.myNickname || '我' : '我') : '未知发送者');
+
+                                    // 创建新的、可见的系统消息来宣布事件
+                                    const acceptanceNotice = {
+                                        role: 'system',
+                                        type: 'pat_message',
+                                        content: `${msgData.name} 收下了 ${senderOfGift} 的礼物 ${originalGift.giftName}`,
+                                        timestamp: messageTimestamp++
+                                    };
+                                    console.log('---------------acceptanceNotice: ', acceptanceNotice)
+                                    // aiMessage = acceptanceNotice; // 将这条新消息交给后续流程处理和渲染
+                                    newMessagesToRender.push(acceptanceNotice);
+                                }
+                                break;
+                            }
+
+                            case 'decline_gift': {
+                                const originalGiftTimestamp = msgData.gift_timestamp;
+                                const originalGiftMsgIndex = chat.history.findIndex(m => m.timestamp === originalGiftTimestamp);
+                                console.log('----------------case accept_gift：', msgData, originalGiftMsgIndex);
+                                if (originalGiftMsgIndex > -1) {
+                                    // 更新数据模型中原始礼物的状态
+                                    const originalGift = chat.history[originalGiftMsgIndex];
+                                    originalGift.status = 'declined';
+
+                                    console.log('-----------------------,', originalGift, chat)
+                                    //【核心修复】健壮地获取送礼者名字
+                                    const senderOfGift = originalGift.senderName || (originalGift.role === 'user' ? (chat.isGroup ? chat.settings.myNickname || '我' : '我') : '未知发送者');
+
+                                    // 创建新的、可见的系统消息
+                                    const declineNotice = {
+                                        role: 'system',
+                                        type: 'pat_message',
+                                        content: `${msgData.name} 婉拒了 ${senderOfGift} 的礼物`,
+                                        timestamp: messageTimestamp++
+                                    };
+                                    // aiMessage = declineNotice; // 将新消息交给后续流程处理
+                                    newMessagesToRender.push(declineNotice);
+                                }
+                                break;
+                            }
+
                             case 'system_message':
-                                aiMessage = { role: 'system', type: 'pat_message', content: msgData.content, timestamp: Date.now() };
+                                newMessagesToRender.push({ role: 'system', type: 'pat_message', content: msgData.content, timestamp: Date.now() });
                                 break;
 
                             // ▼▼▼ 在 triggerAiResponse 的 switch 语句中，【必须添加】这个新的 case ▼▼▼
 
                             case 'share_link':
-                                aiMessage = {
+                                const temp = {
                                     ...baseMessage,
                                     type: 'share_link',
                                     title: msgData.title,
@@ -11704,6 +11820,7 @@ ${contextSummaryForApproval}
                                     source_name: msgData.source_name,
                                     content: msgData.content // 这是文章正文，点击卡片后显示的内容
                                 };
+                                newMessagesToRender.push(temp);
                                 break;
 
                             // ▲▲▲ 添加结束 ▲▲▲
@@ -11717,14 +11834,16 @@ ${contextSummaryForApproval}
                                         senderName: originalMessage.senderName || (originalMessage.role === 'user' ? (chat.settings.myNickname || '我') : chat.name),
                                         content: String(originalMessage.content || '').substring(0, 50),
                                     };
-                                    aiMessage = {
+                                    const temp = {
                                         ...baseMessage,
                                         content: msgData.reply_content,
                                         quote: quoteContext // 核心：在这里附加引用对象
                                     };
+                                    newMessagesToRender.push(temp);
                                 } else {
                                     // 如果找不到被引用的消息，就当作普通消息发送
-                                    aiMessage = { ...baseMessage, content: msgData.reply_content };
+                                    const temp = { ...baseMessage, content: msgData.reply_content };
+                                    newMessagesToRender.push(temp);
                                 }
                                 break;
                             // ▲▲▲ 新增 case 结束 ▲▲▲
@@ -11781,32 +11900,51 @@ ${contextSummaryForApproval}
                             }
                             // ▲▲▲ 新 case 添加结束 ▲▲▲
 
-                            case 'text':
-                                aiMessage = { ...baseMessage, content: String(msgData.content || msgData.message) };
+                            case 'text': {
+                                const temp = { ...baseMessage, content: String(msgData.content || msgData.message) };
+                                newMessagesToRender.push(temp);
                                 break;
-                            case 'sticker':
-                                aiMessage = { ...baseMessage, type: 'sticker', content: msgData.url, meaning: msgData.meaning || '' };
-                                break;
-                            case 'gift':
-                                aiMessage = {
-                                    ...baseMessage,
-                                    type: 'gift',
-                                    name: msgData.name,
-                                    price: msgData.price
-                                };
-                                break;
-                            case 'ai_image':
-                                aiMessage = { ...baseMessage, type: 'ai_image', content: msgData.description };
-                                break;
-                            case 'voice_message':
-                                aiMessage = { ...baseMessage, type: 'voice_message', content: msgData.content };
-                                break;
-                            case 'transfer':
-                                aiMessage = { ...baseMessage, type: 'transfer', amount: msgData.amount, note: msgData.note, receiverName: msgData.receiver || '我' };
-                                break;
+                            }
 
-                            case 'waimai_request':
-                                aiMessage = {
+                            case 'sticker': {
+                                const temp = { ...baseMessage, type: 'sticker', content: msgData.url, meaning: msgData.meaning || '' };
+                                newMessagesToRender.push(temp);
+                                break;
+                            }
+
+                            case 'gift': {
+                                const temp = {
+                                    ...baseMessage, // 这已经包含了 senderName
+                                    type: 'gift',
+                                    giftName: msgData.giftName, // 礼物名称
+                                    price: msgData.price,
+                                    receiverName: msgData.receiver || '我', //收礼人
+                                    status: 'pending' // AI送出的礼物，初始状态总是“待处理”
+                                };
+                                newMessagesToRender.push(temp);
+                                break;
+                            }
+
+                            case 'ai_image': {
+                                const temp = { ...baseMessage, type: 'ai_image', content: msgData.description };
+                                newMessagesToRender.push(temp);
+                                break;
+                            }
+
+                            case 'voice_message': {
+                                const temp = { ...baseMessage, type: 'voice_message', content: msgData.content };
+                                newMessagesToRender.push(temp);
+                                break;
+                            }
+
+                            case 'transfer': {
+                                const temp = { ...baseMessage, type: 'transfer', amount: msgData.amount, note: msgData.note, receiverName: msgData.receiver || '我' };
+                                newMessagesToRender.push(temp);
+                                break;
+                            }
+
+                            case 'waimai_request': {
+                                const temp = {
                                     ...baseMessage,
                                     type: 'waimai_request',
                                     productInfo: msgData.productInfo,
@@ -11814,55 +11952,37 @@ ${contextSummaryForApproval}
                                     status: 'pending',
                                     countdownEndTime: Date.now() + 15 * 60 * 1000,
                                 };
+                                newMessagesToRender.push(temp);
                                 break;
+                            }
 
                             default:
                                 console.warn("收到了未知的AI指令类型:", msgData.type);
                                 break;
                         }
-
-                        // 【核心修复】将渲染逻辑移出循环
-                        if (aiMessage) {
-                            // 1. 将新消息存入历史记录
-                            chat.history.push(aiMessage);
-
-                            if (!isViewingThisChat && !notificationShown) {
-                                let notificationText;
-                                switch (aiMessage.type) {
-                                    case 'transfer':
-                                        notificationText = `[收到一笔转账]`;
-                                        break;
-                                    case 'waimai_request':
-                                        notificationText = `[收到一个外卖代付请求]`;
-                                        break;
-                                    case 'ai_image':
-                                        notificationText = `[图片]`;
-                                        break;
-                                    case 'voice_message':
-                                        notificationText = `[语音]`;
-                                        break;
-                                    case 'sticker':
-                                        notificationText = aiMessage.meaning ? `[表情: ${aiMessage.meaning}]` : '[表情]';
-                                        break;
-                                    default:
-                                        notificationText = String(aiMessage.content || '');
-                                }
-                                const finalNotifText = chat.isGroup ? `${aiMessage.senderName}: ${notificationText}` : notificationText;
-                                showNotification(chatId, finalNotifText.substring(0, 40) + (finalNotifText.length > 40 ? '...' : ''));
-                                notificationShown = true; // 确保只通知一次
+                    }
+                    console.log('1------------newMessagesToRender: ', newMessagesToRender);
+                    if (newMessagesToRender.length > 0) {
+                        console.log('------------newMessagesToRender: ', newMessagesToRender);
+                        // 1. 将所有新消息一次性地、按顺序地加入到历史记录中
+                        chat.history.push(...newMessagesToRender);
+                        // 2. 处理通知和未读数（只需要根据第一条新消息判断一次即可）
+                        if (!isViewingThisChat && !notificationShown) {
+                            const firstNewMessage = newMessagesToRender[0];
+                            let notificationText;
+                            // ... (这里可以复用之前的通知文本生成逻辑) ...
+                            switch (firstNewMessage.type) {
+                                case 'transfer': notificationText = `[收到一笔转账]`; break;
+                                case 'gift': notificationText = `[收到一份礼物]`; break;
+                                // ... 其他 case
+                                default: notificationText = String(firstNewMessage.content || '');
                             }
-
-                            if (!isViewingThisChat) {
-                                // 如果用户不在当前聊天界面，就把这个聊天的未读数 +1
-                                chat.unreadCount = (chat.unreadCount || 0) + 1;
-                            }
-
-                            // 2. 只有在当前聊天界面时，才执行带动画的添加
-                            if (isViewingThisChat) {
-                                appendMessage(aiMessage, chat);
-                                // 3. 【关键】在这里暂停一小会儿，给动画播放的时间
-                                await new Promise(resolve => setTimeout(resolve, Math.random() * 1800 + 1000));
-                            }
+                            const finalNotifText = chat.isGroup ? `${firstNewMessage.senderName}: ${notificationText}` : notificationText;
+                            showNotification(chatId, finalNotifText.substring(0, 40) + (finalNotifText.length > 40 ? '...' : ''));
+                            notificationShown = true;
+                        }
+                        if (!isViewingThisChat) {
+                            chat.unreadCount = (chat.unreadCount || 0) + newMessagesToRender.length;
                         }
                     }
 
@@ -11878,6 +11998,12 @@ ${contextSummaryForApproval}
                     }
 
                     await db.chats.put(chat);
+
+                    if (isViewingThisChat) {
+                        renderChatInterface(chatId);
+                        const messagesContainer = document.getElementById('chat-messages');
+                        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                    }
 
                 } catch (error) {
                     chat.history = chat.history.filter(msg => !msg.isTemporary);
@@ -12829,6 +12955,7 @@ ${worldBookContent} // <--【核心】在这里注入世界书内容
                         fullMessageObject.content = message.content;
                     }
                     else if (message.type === 'gift') {
+                        console.log('gift--- message.name: 1,', message.name);
                         fullMessageObject.name = message.name;
                         fullMessageObject.price = message.price;
                     }
@@ -12844,7 +12971,7 @@ ${worldBookContent} // <--【核心】在这里注入世界书内容
                     voice: { type: 'voice_message', content: '在这里输入语音内容' },
                     image: { type: 'ai_image', description: '在这里输入图片描述' },
                     transfer: { type: 'transfer', amount: 5.20, note: '一点心意' },
-                    gift: { type: 'gift', name: '礼物名称', price: 10 },
+                    gift: { type: 'gift', giftName: '礼物名称', price: 10 },
                     link: { type: 'share_link', title: '文章标题', description: '文章摘要...', source_name: '来源网站', content: '文章完整内容...' }
                 };
 
@@ -15646,7 +15773,7 @@ ${contextSummary}
         <div class="card-body">
             <!-- 【核心修改】在这里新增一个标题行 -->
             ${record.customName ? `<div class="custom-title">${record.customName}</div>` : ''}
-            
+          
             <div class="participants-info"> <!-- 新增一个容器方便布局 -->
                 <div class="participants-avatars">${avatarsHtml}</div>
                 <span class="participants-names">与 ${chatName}</span>
@@ -16170,11 +16297,11 @@ ${contextSummary}
             }
             // ▲▲▲ 这一大块正确的代码到此结束 ▲▲▲
             // ▼▼▼ 【全新】送礼物功能事件绑定 ▼▼▼
-            document.getElementById('send-gift-btn').addEventListener('click', openSendGiftModal);
+            document.getElementById('send-gift-btn').addEventListener('click', openSendgiftModal);
             document.getElementById('cancel-send-gift-btn').addEventListener('click', () => {
                 document.getElementById('send-gift-modal').classList.remove('visible');
             });
-            document.getElementById('confirm-send-gift-btn').addEventListener('click', sendUserGift);
+            document.getElementById('confirm-send-gift-btn').addEventListener('click', sendUsergift);
             // ▲▲▲ 新代码粘贴结束 ▲▲▲
 
             // ▼▼▼ 【全新】送礼物功能核心函数 ▼▼▼
@@ -16182,24 +16309,48 @@ ${contextSummary}
             /**
              * 打开并初始化送礼物模态框
              */
-            function openSendGiftModal() {
+            function openSendgiftModal() {
                 if (!state.activeChatId) return;
+                const chat = state.chats[state.activeChatId];
+
+                const modal = document.getElementById('send-gift-modal');
+                const receiverGroup = document.getElementById('gift-receiver-group');
+
+                // 清空输入框
                 document.getElementById('gift-name-input').value = '';
                 document.getElementById('gift-price-input').value = '';
-                document.getElementById('send-gift-modal').classList.add('visible');
+
+                if (chat.isGroup) {
+                    // 如果是群聊，显示并填充接收人列表
+                    receiverGroup.style.display = 'block';
+                    const receiverSelect = document.getElementById('gift-receiver-select');
+                    receiverSelect.innerHTML = ''; // 清空旧选项
+                    chat.members.forEach(member => {
+                        const option = document.createElement('option');
+                        option.value = member.originalName;
+                        option.textContent = member.groupNickname;
+                        receiverSelect.appendChild(option);
+                    });
+                } else {
+                    // 如果是单聊，隐藏接收人列表
+                    receiverGroup.style.display = 'none';
+                }
+
+                modal.classList.add('visible');
             }
+
 
             /**
              * 用户确认发送礼物
              */
-            async function sendUserGift() {
+            async function sendUsergift() {
                 if (!state.activeChatId) return;
                 const chat = state.chats[state.activeChatId];
 
-                const name = document.getElementById('gift-name-input').value.trim();
+                const giftName = document.getElementById('gift-name-input').value.trim();
                 const price = parseFloat(document.getElementById('gift-price-input').value);
 
-                if (!name) {
+                if (!giftName) {
                     alert('请输入礼物名称！');
                     return;
                 }
@@ -16208,23 +16359,99 @@ ${contextSummary}
                     return;
                 }
 
-                const newGiftMessage = {
+                let receiverName;
+                if (chat.isGroup) {
+                    const receiverSelect = document.getElementById('gift-receiver-select');
+                    receiverName = receiverSelect.value;
+                    if (!receiverName) {
+                        alert('在群聊中，请选择一位接收人！');
+                        return;
+                    }
+                } else {
+                    receiverName = chat.name; // 单聊时，接收者就是对方
+                }
+
+                const myNickname = chat.isGroup ? (chat.settings.myNickname || '我') : '我';
+
+                const newgiftMessage = {
                     role: 'user',
                     type: 'gift',
+                    senderName: myNickname, // 记录发送者
+                    receiverName: receiverName, // 记录接收者
                     timestamp: Date.now(),
-                    name: name,
-                    price: price
+                    giftName: giftName,
+                    price: price,
+                    status: 'pending' // 初始状态为“待处理”
                 };
 
-                chat.history.push(newGiftMessage);
+                chat.history.push(newgiftMessage);
                 await db.chats.put(chat);
 
-                appendMessage(newGiftMessage, chat);
+                appendMessage(newgiftMessage, chat);
                 renderChatList();
 
                 document.getElementById('send-gift-modal').classList.remove('visible');
             }
 
+            // ▼▼▼ 【全新】礼物交互核心功能函数 ▼▼▼
+
+            let activegiftTimestamp = null; // 用于暂存被点击的礼物消息的时间戳
+
+            /**
+             * 显示处理礼物的操作菜单
+             * @param {number} timestamp - 被点击的礼物消息的时间戳
+             */
+            function showgiftActionModal(timestamp) {
+                activegiftTimestamp = timestamp;
+                const chat = state.chats[state.activeChatId];
+                const message = chat.history.find(m => m.timestamp === timestamp);
+                if (message) {
+                    document.getElementById('gift-sender-name').textContent = message.senderName;
+                }
+                document.getElementById('gift-actions-modal').classList.add('visible');
+            }
+
+            /**
+             * 隐藏处理礼物的操作菜单
+             */
+            function hidegiftActionModal() {
+                document.getElementById('gift-actions-modal').classList.remove('visible');
+                activegiftTimestamp = null;
+            }
+
+            /**
+             * 处理用户接受或拒绝礼物的逻辑
+             * @param {string} choice - 用户的选择, 'accepted' 或 'declined'
+             */
+            async function handleUsergiftResponse(choice) {
+                if (!activegiftTimestamp) return;
+
+                const timestamp = activegiftTimestamp;
+                const chat = state.chats[state.activeChatId];
+                const messageIndex = chat.history.findIndex(m => m.timestamp === timestamp);
+                if (messageIndex === -1) return;
+
+                const originalMessage = chat.history[messageIndex];
+                originalMessage.status = choice;
+
+                const myNickname = chat.isGroup ? (chat.settings.myNickname || '我') : '我';
+                const systemContent = `[系统提示：你 (${myNickname}) ${choice === 'accepted' ? '接受' : '婉拒'}了 ${originalMessage.senderName} 送出的礼物“${originalMessage.giftName}”。]`;
+
+                const hiddenMessage = {
+                    role: 'system',
+                    content: systemContent,
+                    timestamp: Date.now(),
+                    isHidden: true
+                };
+                chat.history.push(hiddenMessage);
+
+                await db.chats.put(chat);
+                hidegiftActionModal();
+                renderChatInterface(state.activeChatId);
+                renderChatList();
+                // 触发AI响应，让它对你的决定做出反应
+                triggerAiResponse();
+            }
             // ▲▲▲ 新函数粘贴结束 ▲▲▲
 
 
@@ -16516,7 +16743,7 @@ ${contextSummary}
 
                 // ▼▼▼ 【修正】创建群聊按钮现在打开联系人选择器 ▼▼▼
                 document.getElementById('add-group-chat-btn').addEventListener('click', openContactPickerForGroupCreate);
-                // ▲▲▲ 替换结束 ▲▲▲                      
+                // ▲▲▲ 替换结束 ▲▲▲                    
                 document.getElementById('transfer-cancel-btn').addEventListener('click', () => document.getElementById('transfer-modal').classList.remove('visible'));
                 document.getElementById('transfer-confirm-btn').addEventListener('click', sendUserTransfer);
 
@@ -17717,7 +17944,7 @@ ${contextSummary}
                     document.getElementById('ai-frame-content').style.display = 'none';
                 });
 
-                // ▲▲▲ 替换结束 ▲▲▲    
+                // ▲▲▲ 替换结束 ▲▲▲  
                 // ▲▲▲ 新代码粘贴结束 ▲▲▲
 
                 // ▼▼▼ 在 init() 函数的事件监听器区域，粘贴下面这两行 ▼▼▼
@@ -18582,6 +18809,13 @@ ${contextSummary}
                 document.getElementById('transfer-action-decline').addEventListener('click', () => handleUserTransferResponse('declined'));
                 document.getElementById('transfer-action-cancel').addEventListener('click', hideTransferActionModal);
 
+                // ▼▼▼ 【全新】礼物接收/拒绝功能事件绑定 ▼▼▼
+                document.getElementById('gift-action-accept').addEventListener('click', () => handleUsergiftResponse('accepted'));
+                document.getElementById('gift-action-decline').addEventListener('click', () => handleUsergiftResponse('declined'));
+                document.getElementById('gift-action-cancel').addEventListener('click', hidegiftActionModal);
+                // ▲▲▲ 新代码粘贴结束 ▲▲▲
+
+
                 // ▼▼▼ 用这段【新代码】替换旧的通话记录事件绑定 ▼▼▼
 
                 document.getElementById('chat-list-title').addEventListener('click', renderCallHistoryScreen);
@@ -18917,6 +19151,22 @@ ${contextSummary}
     </div>
     <input type="file" id="custom-frame-upload-input" accept="image/png, image/jpeg, image/gif" style="display: none;">
     <!-- ▲▲▲ 新HTML粘贴结束 ▲▲▲ -->
+    <!-- ▼▼▼ 【全新】礼物操作模态框 ▼▼▼ -->
+    <div id="gift-actions-modal" class="modal">
+        <div class="transfer-actions-content">
+            <div class="transfer-actions-header">这是一个惊喜！</div>
+            <div class="transfer-actions-body">
+                <p>你收到了来自 <strong id="gift-sender-name"></strong> 的一份礼物。</p>
+            </div>
+            <div class="transfer-actions-footer">
+                <button id="gift-action-decline" class="action-btn decline">婉拒心意</button>
+                <button id="gift-action-accept" class="action-btn accept">开心收下</button>
+            </div>
+            <button id="gift-action-cancel" class="cancel-btn">×</button>
+        </div>
+    </div>
+    <!-- ▲▲▲ 新HTML粘贴结束 ▲▲▲ -->
+
 </body>
 
 </html>
